@@ -1,4 +1,17 @@
-int incomingByte = 0;
+#include <Bridge.h>
+#include <BridgeClient.h>
+#include <BridgeServer.h>
+#include <BridgeSSLClient.h>
+#include <BridgeUdp.h>
+#include <Console.h>
+#include <FileIO.h>
+#include <HttpClient.h>
+#include <Mailbox.h>
+#include <Process.h>
+#include <YunClient.h>
+#include <YunServer.h>
+
+String input;
 void setup() {
   pinMode(10, OUTPUT);
   pinMode(7, OUTPUT);
@@ -8,11 +21,14 @@ void setup() {
   pinMode(11, OUTPUT);
 
   pinMode(A0, INPUT);
-    pinMode(A1, INPUT);
+  pinMode(A1, INPUT);
   pinMode(A2, INPUT);
   pinMode(A3, INPUT);
 
- 
+   digitalWrite(7, HIGH);
+  digitalWrite(8, LOW);
+    digitalWrite(12, HIGH);
+  digitalWrite(13, LOW);
 
  Serial.begin(9600);
 }
@@ -25,33 +41,34 @@ void loop() {
 //Serial.println(x);
 
 if (Serial.available() > 0) {
-    // read the incoming byte:
-    incomingByte = Serial.read();
+    // read the incoming bytes
+    input = Serial.readString();
+    String command = input.substring(0,1);
+    String value = input.substring(1, input.length());
+    
 
-    // say what you got:
-    Serial.print("I received: ");
-    Serial.println(incomingByte);
-
-    if(incomingByte == 48){
-      moveForward();
-      delay(500);
-      stopMoving(); 
+    Serial.println(input);
+    Serial.println(command);
+    Serial.println(value);
+    Serial.println("----------");
+    if(command == "v"){
+     setSpeed(value.toInt());
     }
-    if(incomingByte == 49){
-moveBackwards();
-delay(500);
-      stopMoving(); 
-    }
-  }
+     if(command == "s"){
+     setSpeed(0);
+     }
 
-//moveForward();
-// delay(500);
-// moveBackwards();
-//  delay(500);
-// stopMoving(); 
-//   delay(1500);
+    
 
 }
+
+}
+
+void setSpeed(int val){
+  analogWrite(10,val);
+  analogWrite(11,val);
+}
+
 void stopMoving(){ //0
   digitalWrite(7, LOW);
   digitalWrite(8, LOW);
