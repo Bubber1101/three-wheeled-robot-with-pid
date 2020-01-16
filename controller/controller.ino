@@ -10,26 +10,51 @@
 #include <Process.h>
 
 #define echoPin A5
-#define trigPin A4 
+#define trigPin A4
 
 char command;
 int value;
 
-
+//commands
 const char MOVE = 'm';
 const char SET_VELOCITY = 'v';
 const char STOP = 's';
 const char ROTATE = 'r';
 const char SHARP = 'i';
 const char SONAR = 'b';
+const char FUZZY = 'f';
+
+int FUZZY_SET_SIZE = 8;
+
+float CLOSE_DIST[][8] = {{1, 0.5, 0.2, 0, 0, 0, 0, 0}, {30, 40, 50, 60, 70, 80, 90, 100}};
+
+float MED_DIST[][8] = {{0, 0, 0.5, 1, 0.5, 0, 0, 0}, {30, 40, 50, 60, 70, 80, 90, 100}};
+
+float FAR_DIST[][8] = {{0, 0, 0, 0, 0, 0.2, 0.5, 1}, {30, 40, 50, 60, 70, 80, 90, 100}};
+
+float LOW_VEL[][8] = {{1, 0.5, 0.2, 0, 0, 0, 0, 0}, {100, 122, 144, 166, 188, 210, 232, 254}};
+
+float MED_VEL[][8] = {{0, 0, 0, 0.5, 1, 0.5, 0, 0}, {100, 122, 144, 166, 188, 210, 232, 254}};
+
+float HIGH_VEL[][8] = {{0, 0, 0, 0, 0, 0.2, 0.5, 1}, {100, 122, 144, 166, 188, 210, 232, 254}};
+
+float MIN_LOW_VEL[] = {0, 0, 0, 0, 0, 0, 0, 0};
+
+float MIN_MED_VEL[] = {0, 0, 0, 0, 0, 0, 0, 0};
+
+float MIN_HIGH_VEL[] = {0, 0, 0, 0, 0, 0, 0, 0};
+
+float MAX_VEL[][8] = {{0, 0, 0, 0, 0, 0, 0, 0}, {100, 122, 144, 166, 188, 210, 232, 254}};
+
 
 const int CIRCLE = 2 * PI * 13;
 
 void setup()
-{//sonar
-   pinMode(trigPin, OUTPUT);
- pinMode(echoPin, INPUT);
-  
+{ //sonar
+
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+
   pinMode(10, OUTPUT);
   pinMode(7, OUTPUT);
   pinMode(8, OUTPUT);
@@ -68,24 +93,34 @@ void loop()
         move(value);
         Serial.println("Moving");
         break;
+
       case SET_VELOCITY:
-       setVelocity(value);
-        
+        setVelocity(value);
         break;
+
       case STOP:
         Serial.println("Stopping");
         setSpeed(0);
         break;
+
       case ROTATE:
         Serial.println("Rotating");
         rotate(value);
         break;
+
       case SHARP:
-      Serial.println(readSharp());
-      break;
+        Serial.println(readSharp());
+        break;
+
       case SONAR:
-      Serial.println(readSonar());
-      break;
+        Serial.println(readSonar());
+        break;
+
+      case FUZZY:
+        Serial.println("i HOPE YOU KNOW WHAT YOU DOIN");
+        runFuzzy();
+        break;
+
       default:
         Serial.println("You dum, no such command dude");
         break;
@@ -93,27 +128,119 @@ void loop()
   }
 }
 
-float readSharp(){
-  float sensorValue = (float)analogRead(A0);            
-  float outputValue = sensorValue/1023.0*3.3;
-  return (70.0/outputValue)-6.5;           
+void runFuzzy() {
+  float distance = readSharp();
+  float close_ign, med_ign, far_ign;
+  int index;
+  moveForward();
+
+  while (distance > 30) {
+
+    distance = readSharp();
+    index = getIndex(distance);
+//          Serial.println(index);
+
+    close_ign = CLOSE_DIST[0][index];
+//    Serial.print("clsoeign");
+//    Serial.println(close_ign);
+    med_ign = MED_DIST[0][index];
+//    Serial.print("med");
+//    Serial.println(med_ign);
+    far_ign = FAR_DIST[0][index];
+//    Serial.print("far");
+//    Serial.println(far_ign);
+    setMinArr(close_ign, LOW_VEL[0], MIN_LOW_VEL);
+//        Serial.println( "MIN_LOW_VEL");
+//        printArr(MIN_LOW_VEL);
+    setMinArr(med_ign, MED_VEL[0], MIN_MED_VEL);
+//    Serial.println( "MIN_MED_VEL");
+//        printArr(MIN_MED_VEL);
+    setMinArr(far_ign, HIGH_VEL[0], MIN_HIGH_VEL);   
+//    Serial.println( "MIN_HIGH_VEL");
+//        printArr(MIN_HIGH_VEL);        
+    setMaxArr();
+//    Serial.println( "MAX VEL [0]");
+//        printArr(MAX_VEL[0]); 
+        Serial.println( getGravityCenter());
+
+    setSpeed(getGravityCenter());
+
+  }
+  setSpeed(0);
+
 }
 
-float readSonar(){
-digitalWrite(trigPin, LOW); 
- delayMicroseconds(2); 
-
- digitalWrite(trigPin, HIGH);
- delayMicroseconds(10); 
- 
- digitalWrite(trigPin, LOW);
-long  duration = pulseIn(echoPin, HIGH);
- 
- //Calculate the distance (in cm) based on the speed of sound.
-float dist = duration/58.2;
-return dist;
+void setMaxArr() {
+  for (int i = 0; i < FUZZY_SET_SIZE ; i++) {
+    MAX_VEL[0][i] = maxOfThree(MIN_LOW_VEL[i], MIN_MED_VEL[i], MIN_HIGH_VEL[i]);
+  }
 }
-void setVelocity(int x ){
+void printArr(float arr[]){
+  Serial.print("[");
+    for (int i = 0; i < FUZZY_SET_SIZE ; i++) {
+        Serial.print(arr[i]);
+  Serial.print(",");
+
+    }
+
+  Serial.println("]");
+}
+
+float getGravityCenter() {
+  float denominator = 0;
+  float numerator =0;
+
+  for (int i = 0; i < FUZZY_SET_SIZE ; i++) {
+    numerator += MAX_VEL[0][i] * MAX_VEL[1][i];
+    denominator += MAX_VEL[0][i];
+  }
+
+
+  
+  return numerator / denominator;
+}
+
+float maxOfThree(float a, float b, float c) {
+  return max(a, max(b, c));
+}
+
+void setMinArr(float ign, float arr[], float minArr[]) {
+  for (int i = 0; i < FUZZY_SET_SIZE ; i++) {
+    minArr[i] = min(ign, arr[i]);
+  }
+}
+
+int getIndex(float dist) {
+  for (int i = 0; i < FUZZY_SET_SIZE - 1; i++) {
+    if (CLOSE_DIST[1][i] < dist && CLOSE_DIST[1][i + 1] > dist) {
+      return i;
+    }
+  }
+  return FUZZY_SET_SIZE - 1;
+}
+
+
+float readSharp() {
+  float sensorValue = (float)analogRead(A0);
+  float outputValue = sensorValue / 1023.0 * 3.3;
+  return (70.0 / outputValue) - 6.5;
+}
+
+float readSonar() {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+
+  digitalWrite(trigPin, LOW);
+  long  duration = pulseIn(echoPin, HIGH);
+
+  //Calculate the distance (in cm) based on the speed of sound.
+  float dist = duration / 58.2;
+  return dist;
+}
+void setVelocity(int x ) {
   if (x < 0)
   {
     moveBackwards();
@@ -127,20 +254,20 @@ void setVelocity(int x ){
   }
 }
 
-void rotate(int x){
-  int route = CIRCLE*x/360;
+void rotate(int x) {
+  int route = CIRCLE * x / 360;
   int pin = 0;
-  if(x <0){
-    route = route*-1;
+  if (x < 0) {
+    route = route * -1;
     setToRotateLeft();
     setSpeed(255);
     pin = A2;
-  }else{
+  } else {
     setToRotateRight();
     setSpeed(255);
     pin = A3;
   }
-  countUntil(route,pin);
+  countUntil(route, pin);
   setSpeed(0);
 }
 
@@ -156,8 +283,8 @@ void move(int x) {
     moveForward();
     setSpeed(255);
   }
-  countUntil(x,A3);
-    setSpeed(0);
+  countUntil(x, A3);
+  setSpeed(0);
 
 }
 
@@ -202,16 +329,16 @@ void moveForward()
   digitalWrite(13, LOW);
 }
 
-void setToRotateLeft(){
-    digitalWrite(7, HIGH);
+void setToRotateLeft() {
+  digitalWrite(7, HIGH);
   digitalWrite(8, LOW);
 
   digitalWrite(12, LOW);
   digitalWrite(13, LOW);
 }
 
-void setToRotateRight(){
-    digitalWrite(7, LOW);
+void setToRotateRight() {
+  digitalWrite(7, LOW);
   digitalWrite(8, LOW);
 
   digitalWrite(12, HIGH);
