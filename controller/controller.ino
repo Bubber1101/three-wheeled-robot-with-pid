@@ -23,6 +23,7 @@ const char ROTATE = 'r';
 const char SHARP = 'i';
 const char SONAR = 'b';
 const char FUZZY = 'f';
+const char PID = 'p';
 
 int FUZZY_SET_SIZE = 8;
 
@@ -49,9 +50,17 @@ float MAX_VEL[][8] = {{0, 0, 0, 0, 0, 0, 0, 0}, {100, 122, 144, 166, 188, 210, 2
 
 const int CIRCLE = 2 * PI * 13;
 
-void setup()
-{ //sonar
+const double kp = 1.7;
 
+const double ki = 0.0007;
+
+const double kd = 50;
+
+
+
+void setup()
+{
+  //sonar
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
 
@@ -117,8 +126,11 @@ void loop()
         break;
 
       case FUZZY:
-        Serial.println("i HOPE YOU KNOW WHAT YOU DOIN");
         runFuzzy();
+        break;
+
+      case PID:
+        runPid(value);
         break;
 
       default:
@@ -128,6 +140,82 @@ void loop()
   }
 }
 
+
+void runPid(int val) {
+  moveForward();
+  double lastMillis = millis();
+  double counterL = 0;
+  double counterR = 0;
+  int tempL = 0;
+  int tempR = 0;
+  int tempLBefore = 0;
+  int tempRBefore = 0;
+
+  double speedL = 0;
+  double speedR = 0;
+
+  double errorL = 0;
+  double cumErrorL = 0;
+  double lastErrorL = 0;
+  double rateErrorL = 0;
+
+
+  double errorR = 0;
+  double cumErrorR = 0;
+  double lastErrorR = 0;
+  double rateErrorR = 0;
+
+  double dt = 1000;
+
+  while (true) {
+
+    while (millis() - lastMillis < dt) {
+      tempR = digitalRead(A2); //prawe
+      tempL = digitalRead(A3); //lewe
+      if (tempL != tempLBefore && tempL == 1)
+      {
+        counterL++;
+      }
+      if (tempR != tempRBefore && tempR == 1)
+      {
+        counterR++;
+      }
+      tempLBefore = tempL;
+      tempRBefore = tempR;
+      //      delay(1);
+    }
+    lastMillis = millis();
+
+    errorR = val - counterR;
+    cumErrorR += errorR * dt;
+    rateErrorR = (errorR - lastErrorR) / dt;
+    double outR = (kp * errorR + ki * cumErrorR + kd * rateErrorR );
+
+    errorL = val - counterL;
+    cumErrorL += errorL * dt;
+    rateErrorL = (errorL - lastErrorL) / dt;
+    double outL = (kp * errorL + ki * cumErrorL + kd * rateErrorL );
+      Serial.print(counterR);
+      Serial.print(" ");
+      Serial.print(outR);
+      Serial.print("||");
+      Serial.print(counterL);
+      Serial.print(" ");
+      Serial.println(outL);
+
+
+    lastErrorL = errorL;
+    lastErrorR = errorR;
+    counterL = 0;
+    counterR = 0;
+    analogWrite(11, outL);
+    analogWrite(10, outR);//Right
+  }
+}
+
+
+
+
 void runFuzzy() {
   float distance = readSharp();
   float close_ign, med_ign, far_ign;
@@ -135,39 +223,18 @@ void runFuzzy() {
   moveForward();
 
   while (distance > 30) {
-
     distance = readSharp();
     index = getIndex(distance);
-//          Serial.println(index);
-
     close_ign = CLOSE_DIST[0][index];
-//    Serial.print("clsoeign");
-//    Serial.println(close_ign);
     med_ign = MED_DIST[0][index];
-//    Serial.print("med");
-//    Serial.println(med_ign);
     far_ign = FAR_DIST[0][index];
-//    Serial.print("far");
-//    Serial.println(far_ign);
     setMinArr(close_ign, LOW_VEL[0], MIN_LOW_VEL);
-//        Serial.println( "MIN_LOW_VEL");
-//        printArr(MIN_LOW_VEL);
     setMinArr(med_ign, MED_VEL[0], MIN_MED_VEL);
-//    Serial.println( "MIN_MED_VEL");
-//        printArr(MIN_MED_VEL);
-    setMinArr(far_ign, HIGH_VEL[0], MIN_HIGH_VEL);   
-//    Serial.println( "MIN_HIGH_VEL");
-//        printArr(MIN_HIGH_VEL);        
+    setMinArr(far_ign, HIGH_VEL[0], MIN_HIGH_VEL);
     setMaxArr();
-//    Serial.println( "MAX VEL [0]");
-//        printArr(MAX_VEL[0]); 
-        Serial.println( getGravityCenter());
-
     setSpeed(getGravityCenter());
-
   }
   setSpeed(0);
-
 }
 
 void setMaxArr() {
@@ -175,28 +242,25 @@ void setMaxArr() {
     MAX_VEL[0][i] = maxOfThree(MIN_LOW_VEL[i], MIN_MED_VEL[i], MIN_HIGH_VEL[i]);
   }
 }
-void printArr(float arr[]){
+
+void printArr(float arr[]) {
   Serial.print("[");
-    for (int i = 0; i < FUZZY_SET_SIZE ; i++) {
-        Serial.print(arr[i]);
-  Serial.print(",");
-
-    }
-
+  for (int i = 0; i < FUZZY_SET_SIZE ; i++) {
+    Serial.print(arr[i]);
+    Serial.print(",");
+  }
   Serial.println("]");
 }
 
 float getGravityCenter() {
   float denominator = 0;
-  float numerator =0;
+  float numerator = 0;
 
   for (int i = 0; i < FUZZY_SET_SIZE ; i++) {
     numerator += MAX_VEL[0][i] * MAX_VEL[1][i];
     denominator += MAX_VEL[0][i];
   }
 
-
-  
   return numerator / denominator;
 }
 
@@ -218,7 +282,6 @@ int getIndex(float dist) {
   }
   return FUZZY_SET_SIZE - 1;
 }
-
 
 float readSharp() {
   float sensorValue = (float)analogRead(A0);
@@ -285,7 +348,6 @@ void move(int x) {
   }
   countUntil(x, A3);
   setSpeed(0);
-
 }
 
 void countUntil(int max, int pin)
@@ -302,13 +364,12 @@ void countUntil(int max, int pin)
     }
     tempBefore = temp;
   }
-
 }
 
 void setSpeed(int val)
 {
-  analogWrite(10, val);
-  analogWrite(11, val);
+  analogWrite(10, val); //prawo
+  analogWrite(11, val); //lewy
 }
 
 void stopMoving()
