@@ -52,9 +52,9 @@ const int CIRCLE = 2 * PI * 13;
 
 const double kp = 1.7;
 
-const double ki = 0.0007;
+const double ki = 0.0003;
 
-const double kd = 50;
+const double kd = 20;
 
 
 
@@ -195,10 +195,12 @@ void runPid(int val) {
     cumErrorL += errorL * dt;
     rateErrorL = (errorL - lastErrorL) / dt;
     double outL = (kp * errorL + ki * cumErrorL + kd * rateErrorL );
+
+    
       Serial.print(counterR);
       Serial.print(" ");
       Serial.print(outR);
-      Serial.print("||");
+      Serial.print(" ");
       Serial.print(counterL);
       Serial.print(" ");
       Serial.println(outL);
